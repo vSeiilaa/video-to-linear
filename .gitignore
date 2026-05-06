@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# App runtime data — do not commit videos or analysis outputs
+uploads/
+out/
+
+# Disk cache (transcription results)
+.cache/
+
+# Secrets
+.env
+
+# Editor / OS
+.DS_Store
+*.code-workspace
+.claude/
+
+# Context / scratch files
+context/

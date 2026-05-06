@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bug Report</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; background: #f4f6f9; }
+    h1 { margin-bottom: .25rem; }
+    .meta { font-size: 0.85rem; color: #666; margin-bottom: 1.5rem; }
+    video { width: 100%; max-width: 860px; border-radius: 8px; background: #000; margin-bottom: 1.5rem; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.88rem; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    th { background: #f0f4ff; text-align: left; padding: .65rem .85rem; border-bottom: 2px solid #d0d8f0; }
+    td { padding: .65rem .85rem; border-bottom: 1px solid #eee; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f9f9ff; }
+    .sev { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 0.78rem; font-weight: 600; }
+    .sev-low      { background: #e6f4ea; color: #2e7d32; }
+    .sev-medium   { background: #fff3e0; color: #e65100; }
+    .sev-high     { background: #fce8e6; color: #c62828; }
+    .sev-critical { background: #b71c1c; color: #fff; }
+    .jump-btn {
+      background: #f0f4ff; border: 1px solid #c5d3f0; padding: 3px 10px;
+      border-radius: 5px; cursor: pointer; font-size: 0.85rem;
+    }
+    .jump-btn:hover { background: #dce6ff; }
+  </style>
+</head>
+<body>
+  <h1>Bug Report</h1>
+  <div class="meta">
+    {{ bugs | length }} bug(s) found
+    {% if provider and model_id %} &nbsp;·&nbsp; {{ provider }} / {{ model_id }}{% endif %}
+  </div>
+
+  <video id="video" controls src="{{ video_path }}"></video>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Title</th>
+        <th>Severity</th>
+        <th>Description</th>
+        <th>Jump</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for bug in bugs %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ bug.title }}</td>
+        <td><span class="sev sev-{{ bug.severity }}">{{ bug.severity }}</span></td>
+        <td>{{ bug.description }}</td>
+        <td><button class="jump-btn" onclick="jump({{ bug.start_ms / 1000 }})">▶</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+<script>
+function jump(t) {
+  const v = document.getElementById('video');
+  v.currentTime = t;
+  v.play();
+}
+</script>
+</body>
+</html>

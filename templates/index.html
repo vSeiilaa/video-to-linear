@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bug Video Reporter</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f4f6f9; min-height: 100vh; display: flex; flex-direction: column; }
+
+    header { background: #1a1a2e; color: #fff; padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
+    header h1 { font-size: 1.25rem; font-weight: 600; }
+    header span { font-size: 0.85rem; opacity: .6; }
+
+    .layout { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Upload sidebar ── */
+    .sidebar {
+      width: 340px; min-width: 280px; background: #fff;
+      border-right: 1px solid #e0e0e0; padding: 1.25rem;
+      display: flex; flex-direction: column; gap: 1rem; overflow-y: auto;
+    }
+    .sidebar h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: .06em; color: #888; }
+    label { display: block; font-size: 0.85rem; color: #333; margin-bottom: .3rem; }
+    select {
+      width: 100%; padding: .45rem .7rem; border: 1px solid #ccc; border-radius: 6px;
+      font-size: 0.88rem; background: #fafafa;
+    }
+    select:focus { outline: 2px solid #4a90e2; border-color: #4a90e2; background: #fff; }
+    .provider-row { display: flex; gap: .5rem; }
+    .provider-row select { flex: 1; }
+
+    .layout.results-mode .sidebar { display: none; }
+
+    /* ── Drop zone ── */
+    .drop-zone {
+      border: 2px dashed #c5d3f0; border-radius: 10px; padding: 1.25rem 1rem;
+      text-align: center; cursor: pointer;
+      transition: border-color .15s, background .15s; background: #f8faff;
+    }
+    .drop-zone:hover, .drop-zone.dragover { border-color: #1a73e8; background: #eef3ff; }
+    .drop-zone svg { width: 32px; height: 32px; color: #8aabe8; margin-bottom: .4rem; }
+    .drop-zone p { font-size: 0.83rem; color: #555; line-height: 1.5; }
+    .drop-zone .hint { font-size: 0.73rem; color: #999; margin-top: .2rem; }
+    .browse-btn {
+      display: inline-block; margin-top: .5rem;
+      padding: .3rem .85rem; background: #1a73e8; color: #fff;
+      border: none; border-radius: 5px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+    }
+    .browse-btn:hover { background: #1558b0; }
+    #fileInput { display: none; }
+
+    /* File pill */
+    #filePill {
+      display: none; align-items: center; gap: .5rem;
+      background: #e8f0fe; border-radius: 6px; padding: .45rem .7rem;
+      font-size: 0.8rem; color: #1a56c4;
+    }
+    #filePill svg { flex-shrink: 0; width: 15px; height: 15px; }
+    #filePill .fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #filePill .fsize { color: #666; flex-shrink: 0; }
+    #filePill .clear-btn { background: none; border: none; cursor: pointer; color: #888; font-size: .95rem; padding: 0 2px; }
+    #filePill .clear-btn:hover { color: #c62828; }
+
+    /* Upload progress */
+    #upload-bar-wrap { display: none; background: #e8f0fe; border-radius: 6px; overflow: hidden; height: 5px; }
+    #upload-bar { height: 100%; width: 0%; background: #1a73e8; transition: width .1s; }
+
+    /* ── Prompt editor ── */
+    details.prompt-section { border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+    details.prompt-section summary {
+      padding: .6rem .85rem; font-size: 0.83rem; font-weight: 600; color: #444;
+      cursor: pointer; list-style: none; display: flex; align-items: center; gap: .4rem;
+      background: #fafafa; user-select: none;
+    }
+    details.prompt-section summary::-webkit-details-marker { display: none; }
+    details.prompt-section summary .chevron { transition: transform .2s; display: inline-block; }
+    details[open].prompt-section summary .chevron { transform: rotate(90deg); }
+    .prompt-fields { padding: .75rem; display: flex; flex-direction: column; gap: .75rem; }
+    .prompt-fields label { font-size: 0.78rem; color: #555; margin-bottom: .2rem; }
+    .prompt-fields textarea {
+      width: 100%; padding: .5rem; border: 1px solid #ddd; border-radius: 6px;
+      font-family: monospace; font-size: 0.75rem; resize: vertical;
+      background: #fafffe; line-height: 1.45;
+    }
+    .prompt-fields textarea:focus { outline: 2px solid #4a90e2; border-color: #4a90e2; }
+    .reset-btn {
+      align-self: flex-end; padding: .25rem .65rem; font-size: 0.75rem;
+      background: #f0f0f0; border: 1px solid #ccc; border-radius: 5px; cursor: pointer;
+    }
+    .reset-btn:hover { background: #e0e0e0; }
+
+    /* ── Linear sidebar section ── */
+    .linear-label-row {
+      display: flex; align-items: center; gap: .45rem; margin-bottom: .3rem;
+    }
+    .linear-label-row label { margin: 0; }
+    .linear-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #ccc; flex-shrink: 0;
+    }
+    .linear-dot.connected { background: #4caf50; }
+    #linear-team-badge { font-size: 0.74rem; color: #999; font-weight: 400; }
+
+    .linear-key-row { display: flex; gap: .4rem; margin-bottom: .35rem; }
+    .settings-input {
+      width: 100%; padding: .42rem .6rem; border: 1px solid #ccc; border-radius: 6px;
+      font-size: 0.82rem; font-family: monospace; background: #fafafa; color: #333;
+    }
+    .settings-input:focus { outline: 2px solid #4a90e2; border-color: #4a90e2; background: #fff; }
+
+    .linear-key-row input {
+      flex: 1; padding: .42rem .6rem; border: 1px solid #ccc; border-radius: 6px;
+      font-size: 0.82rem; font-family: monospace; background: #fafafa; color: #333;
+    }
+    .linear-key-row input:focus { outline: 2px solid #5e6ad2; border-color: #5e6ad2; }
+    .linear-connect-btn {
+      padding: .42rem .7rem; border: none; border-radius: 6px;
+      background: #5e6ad2; color: #fff;
+      font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+      transition: background .15s;
+    }
+    .linear-connect-btn:hover { background: #4b55b0; }
+    .linear-connect-btn:disabled { background: #b0b4e6; cursor: not-allowed; }
+
+    #linear-team-select {
+      width: 100%; padding: .42rem .6rem; border: 1px solid #ccc; border-radius: 6px;
+      font-size: 0.82rem; background: #fafafa; display: none; margin-bottom: .25rem;
+    }
+    #linear-team-select:focus { outline: 2px solid #5e6ad2; }
+
+    #linear-msg { font-size: 0.76rem; min-height: .9rem; }
+    #linear-msg.ok  { color: #4caf50; }
+    #linear-msg.err { color: #c62828; }
+
+    /* Run button */
+    button#runBtn {
+      width: 100%; padding: .6rem; background: #1a73e8; color: #fff;
+      border: none; border-radius: 6px; font-size: 0.92rem; font-weight: 600;
+      cursor: pointer; transition: background .15s;
+    }
+    button#runBtn:hover { background: #1558b0; }
+    button#runBtn:disabled { background: #9bb9ea; cursor: not-allowed; }
+
+    /* ── Main area ── */
+    .main { flex: 1; overflow: hidden; display: flex; }
+
+    #upload-view {
+      flex: 1; padding: 2rem; display: flex; flex-direction: column; gap: 1.5rem; overflow: auto;
+    }
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #aaa; gap: .75rem;
+    }
+    .empty-state svg { width: 52px; height: 52px; opacity: .3; }
+
+    #log-box {
+      background: #1a1a2e; color: #a8d8a8; font-family: monospace; font-size: 0.8rem;
+      padding: 1rem; border-radius: 8px; max-height: 200px; overflow-y: auto;
+      white-space: pre-wrap; display: none;
+    }
+    #log-box .err { color: #ff8080; }
+
+    /* ── Results layout ── */
+    #results-layout { flex: 1; overflow: hidden; }
+
+    /* Left: bug list panel */
+    #bug-list-panel {
+      width: 300px; min-width: 240px;
+      display: flex; flex-direction: column;
+      border-right: 1px solid #e0e0e0;
+      background: #fff; overflow: hidden;
+    }
+
+    .list-header {
+      padding: .9rem 1.1rem;
+      border-bottom: 1px solid #e8e8e8;
+      display: flex; flex-direction: column; gap: .35rem;
+      flex-shrink: 0;
+    }
+    #new-video-btn {
+      display: inline-flex; align-items: center; gap: .3rem;
+      background: none; border: none; padding: 0; cursor: pointer;
+      font-size: 0.82rem; color: #1a73e8; font-weight: 500;
+    }
+    #new-video-btn:hover { text-decoration: underline; }
+    .list-meta { font-size: 0.74rem; color: #aaa; }
+
+    /* Linear connection badge shown in results mode (sidebar is hidden) */
+    #list-linear-status {
+      font-size: 0.72rem; display: flex; align-items: center; gap: .3rem;
+    }
+    #list-linear-status .dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #ccc; flex-shrink: 0;
+    }
+    #list-linear-status .dot.on { background: #4caf50; }
+
+    #bug-list { flex: 1; overflow-y: auto; }
+
+    .bug-list-item {
+      padding: .85rem 1.1rem; border-bottom: 1px solid #f2f2f2;
+      cursor: pointer; display: flex; flex-direction: column; gap: .2rem;
+      border-left: 3px solid transparent;
+    }
+    .bug-list-item:hover { background: #f8f9ff; }
+    .bug-list-item.selected { background: #eef2ff; border-left-color: #4a90e2; }
+    .bug-list-item.sent .item-num::after { content: ' ✓'; color: #4caf50; }
+
+    .item-title-row { display: flex; align-items: baseline; gap: .45rem; min-width: 0; }
+    .item-num { font-size: 0.72rem; color: #bbb; flex-shrink: 0; }
+    .item-title {
+      font-size: 0.86rem; font-weight: 600; color: #222;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .item-sev { font-size: 0.73rem; color: #bbb; padding-left: 1.1rem; }
+
+    /* Right: bug detail panel */
+    #bug-detail-panel {
+      flex: 1; overflow-y: auto;
+      padding: 2.5rem 3rem;
+      background: #fafbff;
+      display: flex; flex-direction: column; gap: 1.1rem;
+    }
+    #detail-placeholder {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      color: #ccc; font-size: 0.9rem;
+    }
+
+    /* Editable title */
+    .detail-title {
+      font-size: 1.5rem; font-weight: 700; color: #1a1a2e; line-height: 1.3;
+      outline: none; border-radius: 5px; cursor: text;
+    }
+    .detail-title:hover   { background: rgba(0,0,0,.03); }
+    .detail-title:focus   { background: #fff; box-shadow: 0 0 0 2px #4a90e2; padding: .15rem .35rem; }
+
+    .detail-severity { display: flex; align-items: center; gap: .5rem; font-size: 0.84rem; color: #999; }
+    .detail-severity span { flex-shrink: 0; }
+
+    .sev-sel {
+      -webkit-appearance: none; appearance: none;
+      border: 1px solid #ddd; padding: 2px 22px 2px 8px; border-radius: 4px;
+      font-size: 0.82rem; font-weight: 500; cursor: pointer;
+      background: #f5f5f5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23aaa'/%3E%3C/svg%3E") no-repeat right 7px center;
+      color: #555;
+    }
+    .sev-sel:focus { outline: 2px solid #4a90e2; border-color: #4a90e2; }
+
+    /* Editable description */
+    .detail-description {
+      font-size: 0.93rem; color: #333; line-height: 1.7;
+      white-space: pre-wrap; outline: none; border-radius: 5px; cursor: text;
+    }
+    .detail-description:hover { background: rgba(0,0,0,.02); }
+    .detail-description:focus { background: #fff; box-shadow: 0 0 0 2px #4a90e2; padding: .35rem .5rem; }
+
+    /* Edit hint */
+    .edit-hint {
+      font-size: 0.72rem; color: #bbb; margin-top: -.5rem;
+      display: flex; align-items: center; gap: .25rem;
+    }
+
+    .detail-video-label {
+      font-size: 0.74rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .07em; color: #bbb; margin-top: .4rem;
+    }
+
+    /* Video constrained in both dimensions — handles portrait (iPad) clips */
+    .detail-video {
+      max-width: 100%; max-height: 55vh;
+      width: auto; height: auto;
+      display: block;
+      border-radius: 8px; background: #000;
+    }
+
+    /* Linear action */
+    .linear-action { margin-top: .25rem; }
+
+    .linear-create-btn {
+      display: inline-flex; align-items: center; gap: .45rem;
+      padding: .45rem 1rem; border: none; border-radius: 6px;
+      background: #5e6ad2; color: #fff;
+      font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: background .15s;
+    }
+    .linear-create-btn:hover    { background: #4b55b0; }
+    .linear-create-btn:disabled { background: #c0c4ec; cursor: not-allowed; }
+
+    .linear-loading {
+      font-size: 0.84rem; color: #888; display: flex; align-items: center; gap: .5rem;
+    }
+    .linear-spinner {
+      width: 14px; height: 14px; border: 2px solid #ddd; border-top-color: #5e6ad2;
+      border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .linear-done-link {
+      display: inline-flex; align-items: center; gap: .4rem;
+      font-size: 0.85rem; font-weight: 600; color: #4caf50; text-decoration: none;
+    }
+    .linear-done-link:hover { text-decoration: underline; }
+
+    .linear-err-row { display: flex; flex-direction: column; gap: .4rem; }
+    .linear-err-msg { font-size: 0.8rem; color: #c62828; }
+
+    /* ── Storage section ── */
+    .storage-path {
+      font-size: 0.74rem; font-family: monospace; color: #555;
+      background: #f3f4f6; border: 1px solid #e0e0e0; border-radius: 5px;
+      padding: .35rem .55rem; word-break: break-all; line-height: 1.5;
+    }
+    .storage-path .path-label { font-family: system-ui, sans-serif; color: #999; font-size: 0.7rem; display: block; margin-bottom: .15rem; }
+    .open-folder-btn {
+      display: inline-flex; align-items: center; gap: .35rem;
+      padding: .35rem .75rem; font-size: 0.8rem; font-weight: 500;
+      background: #f0f0f0; border: 1px solid #ccc; border-radius: 5px;
+      cursor: pointer; color: #333; transition: background .12s;
+    }
+    .open-folder-btn:hover { background: #e3e3e3; }
+
+    .linear-done-row { display: flex; flex-direction: column; gap: .35rem; }
+    .linear-clip-warn { font-size: 0.76rem; color: #b45309; }  /* amber — clip missing, not critical */
+
+    /* ── History ── */
+    .history-header {
+      font-size: 0.74rem; font-weight: 600; color: #999;
+      text-transform: uppercase; letter-spacing: .07em;
+    }
+    .history-item {
+      background: #fff; border: 1px solid #e8e8e8; border-radius: 8px;
+      padding: .7rem 1rem; cursor: pointer;
+      transition: border-color .12s, box-shadow .12s;
+      display: flex; flex-direction: column; gap: .2rem;
+    }
+    .history-item:hover { border-color: #4a90e2; box-shadow: 0 1px 6px rgba(74,144,226,.15); }
+    .history-filename { font-size: 0.86rem; font-weight: 600; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .history-meta { font-size: 0.74rem; color: #aaa; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🎬 Bug Video Reporter</h1>
+  <span>Turn narrated testing videos into structured bug reports</span>
+</header>
+
+<div class="layout" id="layout">
+
+  <!-- ── Settings sidebar ── -->
+  <aside class="sidebar">
+    <h2>Settings</h2>
+
+    <!-- Video drop zone -->
+    <div>
+      <label>Video file</label>
+      <div class="drop-zone" id="dropZone"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
+           onclick="document.getElementById('fileInput').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+        </svg>
+        <p>Drag &amp; drop your video here</p>
+        <p class="hint">MP4 · MOV · AVI · MKV · WEBM · M4V · MPEG</p>
+        <button class="browse-btn" onclick="event.stopPropagation(); document.getElementById('fileInput').click()">
+          Browse files
+        </button>
+      </div>
+      <input type="file" id="fileInput"
+             accept=".mp4,.mov,.avi,.mkv,.webm,.m4v,.mpeg,.mpg,video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm"
+             onchange="onFileSelected(this.files[0])" />
+      <div id="filePill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z"/>
+        </svg>
+        <span class="fname" id="pillName"></span>
+        <span class="fsize" id="pillSize"></span>
+        <button class="clear-btn" title="Remove" onclick="clearFile()">✕</button>
+      </div>
+    </div>
+
+    <div id="upload-bar-wrap"><div id="upload-bar"></div></div>
+
+    <!-- ── AI section ── -->
+    <details class="prompt-section">
+      <summary><span class="chevron">›</span> AI</summary>
+      <div class="prompt-fields">
+        <div>
+          <label>Provider &amp; Model</label>
+          <div class="provider-row">
+            <select id="provider" onchange="onProviderChange()">
+              {% for p in providers %}
+              <option value="{{ p }}">{{ p | capitalize }}</option>
+              {% endfor %}
+            </select>
+            <select id="model_id">
+              {% for m in providers.values() | first %}
+              <option value="{{ m.id }}">{{ m.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label id="ai-key-label">OpenAI API Key</label>
+          <input type="password" id="aiApiKey" class="settings-input"
+                 placeholder="sk-…" autocomplete="off"
+                 oninput="onAiKeyInput()" />
+        </div>
+        <div id="whisper-key-row" style="display:none">
+          <label>OpenAI API Key <span style="font-weight:400;color:#aaa">(for audio transcription)</span></label>
+          <input type="password" id="openaiTranscriptionKey" class="settings-input"
+                 placeholder="sk-…" autocomplete="off"
+                 oninput="localStorage.setItem('openai_transcription_key', this.value)" />
+        </div>
+        <details class="prompt-section">
+          <summary><span class="chevron">›</span> Prompts</summary>
+          <div class="prompt-fields">
+            <div>
+              <label>Bug finder prompt</label>
+              <textarea id="finderPrompt" rows="9">{{ finder_prompt }}</textarea>
+            </div>
+            <div>
+              <label>Bug report prompt</label>
+              <textarea id="reportPrompt" rows="11">{{ report_prompt }}</textarea>
+            </div>
+            <button class="reset-btn" onclick="resetPrompts()">↺ Reset to defaults</button>
+          </div>
+        </details>
+      </div>
+    </details>
+
+    <!-- ── Linear section ── -->
+    <details class="prompt-section" id="linear-section">
+      <summary>
+        <span class="chevron">›</span> Linear
+        <span class="linear-dot" id="linear-dot" style="margin-left:.3rem;"></span>
+        <span id="linear-team-badge"></span>
+      </summary>
+      <div class="prompt-fields">
+        <div class="linear-key-row">
+          <input type="password" id="linearKey" placeholder="lin_api_…"
+                 autocomplete="off" oninput="onLinearKeyInput()" />
+          <button class="linear-connect-btn" id="linearConnectBtn" onclick="connectLinear()">
+            Connect
+          </button>
+        </div>
+        <select id="linear-team-select" onchange="onLinearTeamChange()">
+          <option value="">— pick a team —</option>
+        </select>
+        <div id="linear-msg"></div>
+      </div>
+    </details>
+
+    <!-- ── Storage section ── -->
+    <details class="prompt-section">
+      <summary><span class="chevron">›</span> Storage</summary>
+      <div class="prompt-fields">
+        <div class="storage-path">
+          <span class="path-label">Clips &amp; transcoded videos</span>{{ output_dir }}
+        </div>
+        <div class="storage-path">
+          <span class="path-label">Original uploads</span>{{ uploads_dir }}
+        </div>
+        <button class="open-folder-btn" onclick="openStorage()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3.75 9.75h16.5m-16.5 0A2.25 2.25 0 015.25 7.5h4.5l1.5-1.5h5.25A2.25 2.25 0 0118.75 8.25v.75m-15 0v7.5A2.25 2.25 0 005.25 19.5h13.5A2.25 2.25 0 0021 17.25V9.75"/>
+          </svg>
+          Open clips folder
+        </button>
+      </div>
+    </details>
+
+    <button id="runBtn" onclick="startJob()" disabled>▶ Run Analysis</button>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="main">
+
+    <!-- Upload / processing view -->
+    <div id="upload-view">
+      <div class="empty-state" id="empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z"/>
+        </svg>
+        <p>Upload a video and click <strong>Run Analysis</strong></p>
+      </div>
+
+      <!-- Previous analyses -->
+      <div id="history-section" style="display:none; flex-direction:column; gap:.6rem;">
+        <div class="history-header">Previous analyses</div>
+        <div id="history-list" style="display:flex; flex-direction:column; gap:.5rem;"></div>
+      </div>
+
+      <div id="log-box"></div>
+    </div>
+
+    <!-- Results: bug list on left, detail on right -->
+    <div id="results-layout" style="display:none">
+
+      <!-- Left: issue list -->
+      <div id="bug-list-panel">
+        <div class="list-header">
+          <button id="new-video-btn" onclick="resetToUpload()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+            </svg>
+            New video
+          </button>
+          <div class="list-meta" id="list-meta"></div>
+          <!-- Linear connection + session status (sidebar is hidden in results mode) -->
+          <div id="list-linear-status"></div>
+          <div id="list-session-status" style="display:none; font-size:0.72rem; align-items:center; gap:.3rem;"></div>
+        </div>
+        <div id="bug-list"></div>
+      </div>
+
+      <!-- Right: issue detail -->
+      <div id="bug-detail-panel">
+        <div id="detail-placeholder">← Select an issue to view details</div>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+<script>
+const PROVIDERS = {{ providers | tojson }};
+const DEFAULT_FINDER_PROMPT = {{ finder_prompt | tojson }};
+const DEFAULT_REPORT_PROMPT = {{ report_prompt | tojson }};
+const ALLOWED_EXTS = new Set(['.mp4','.mov','.avi','.mkv','.webm','.m4v','.mpeg','.mpg']);
+
+let _selectedFile     = null;
+let _poll             = null;
+let _lastLog          = 0;
+let _currentJobId     = null;
+let _currentBugs      = [];
+let _selectedBugIndex = null;
+let _linearState      = {};   // bugIndex → {status, identifier, url, error}
+let _linearSession    = null; // {identifier, url} for current job's session issue
+
+// ── Drag & drop ──────────────────────────────────────────────
+function onDragOver(e) { e.preventDefault(); document.getElementById('dropZone').classList.add('dragover'); }
+function onDragLeave()  { document.getElementById('dropZone').classList.remove('dragover'); }
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) validateAndSelect(file);
+}
+function onFileSelected(file) { if (file) validateAndSelect(file); }
+
+function validateAndSelect(file) {
+  const ext = '.' + file.name.split('.').pop().toLowerCase();
+  if (!ALLOWED_EXTS.has(ext)) {
+    alert(`Unsupported format "${ext}".\nAllowed: ${[...ALLOWED_EXTS].join(', ')}`);
+    document.getElementById('fileInput').value = '';
+    return;
+  }
+  _selectedFile = file;
+  document.getElementById('dropZone').style.display = 'none';
+  document.getElementById('filePill').style.display = 'flex';
+  document.getElementById('pillName').textContent = file.name;
+  document.getElementById('pillSize').textContent = fmtSize(file.size);
+  document.getElementById('runBtn').disabled = false;
+}
+
+function clearFile() {
+  _selectedFile = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('filePill').style.display = 'none';
+  document.getElementById('dropZone').style.display = '';
+  document.getElementById('runBtn').disabled = true;
+}
+
+function fmtSize(b) {
+  if (b < 1024)    return b + ' B';
+  if (b < 1024**2) return (b / 1024).toFixed(1) + ' KB';
+  if (b < 1024**3) return (b / 1024**2).toFixed(1) + ' MB';
+  return (b / 1024**3).toFixed(2) + ' GB';
+}
+
+// ── Provider dropdown ────────────────────────────────────────
+const _KEY_LABELS = { openai: 'OpenAI API Key', claude: 'Anthropic API Key', gemini: 'Gemini API Key' };
+
+function onProviderChange() {
+  const p   = document.getElementById('provider').value;
+  const sel = document.getElementById('model_id');
+  sel.innerHTML = '';
+  (PROVIDERS[p] || []).forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.id; opt.textContent = m.label;
+    sel.appendChild(opt);
+  });
+  // Swap the API key field for the selected provider
+  document.getElementById('ai-key-label').textContent = _KEY_LABELS[p] || 'API Key';
+  document.getElementById('aiApiKey').value = localStorage.getItem('ai_key_' + p) || '';
+  // Show a separate Whisper/OpenAI key field when using a non-OpenAI LLM
+  document.getElementById('whisper-key-row').style.display = p === 'openai' ? 'none' : '';
+  if (p !== 'openai') {
+    document.getElementById('openaiTranscriptionKey').value =
+      localStorage.getItem('openai_transcription_key') || '';
+  }
+}
+
+function onAiKeyInput() {
+  const p = document.getElementById('provider').value;
+  localStorage.setItem('ai_key_' + p, document.getElementById('aiApiKey').value);
+}
+
+function initAiKey() {
+  const p = document.getElementById('provider').value;
+  document.getElementById('ai-key-label').textContent = _KEY_LABELS[p] || 'API Key';
+  document.getElementById('aiApiKey').value = localStorage.getItem('ai_key_' + p) || '';
+  const whisperKey = localStorage.getItem('openai_transcription_key') || '';
+  document.getElementById('openaiTranscriptionKey').value = whisperKey;
+  document.getElementById('whisper-key-row').style.display = p === 'openai' ? 'none' : '';
+}
+
+// ── Prompts ──────────────────────────────────────────────────
+function resetPrompts() {
+  document.getElementById('finderPrompt').value = DEFAULT_FINDER_PROMPT;
+  document.getElementById('reportPrompt').value = DEFAULT_REPORT_PROMPT;
+}
+
+// ── Log ──────────────────────────────────────────────────────
+function addLog(msg, isErr) {
+  const box = document.getElementById('log-box');
+  box.style.display = 'block';
+  const line = document.createElement('div');
+  if (isErr) line.className = 'err';
+  line.textContent = msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ── Upload + run ─────────────────────────────────────────────
+function startJob() {
+  if (!_selectedFile) return;
+
+  document.getElementById('empty').style.display          = 'none';
+  document.getElementById('history-section').style.display = 'none';
+  document.getElementById('log-box').innerHTML             = '';
+  document.getElementById('log-box').style.display         = 'none';
+  document.getElementById('runBtn').disabled               = true;
+
+  const wrap = document.getElementById('upload-bar-wrap');
+  const bar  = document.getElementById('upload-bar');
+  wrap.style.display = 'block';
+  bar.style.width    = '0%';
+
+  const fd = new FormData();
+  fd.append('video',         _selectedFile);
+  fd.append('provider',      document.getElementById('provider').value);
+  fd.append('model_id',      document.getElementById('model_id').value);
+  fd.append('finder_prompt', document.getElementById('finderPrompt').value);
+  fd.append('report_prompt', document.getElementById('reportPrompt').value);
+  fd.append('ai_api_key',    document.getElementById('aiApiKey').value);
+  const whisper = document.getElementById('openaiTranscriptionKey').value;
+  if (whisper) fd.append('openai_transcription_key', whisper);
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/run');
+  xhr.upload.onprogress = e => {
+    if (e.lengthComputable) bar.style.width = Math.round(e.loaded / e.total * 100) + '%';
+  };
+  xhr.onload = () => {
+    wrap.style.display = 'none';
+    const data = JSON.parse(xhr.responseText);
+    if (data.error) {
+      addLog('ERROR: ' + data.error, true);
+      document.getElementById('runBtn').disabled = false;
+      return;
+    }
+    _currentJobId = data.job_id;
+    addLog('Upload complete. Analysing…');
+    _lastLog = 1;
+    _poll = setInterval(() => pollStatus(data.job_id), 1000);
+  };
+  xhr.onerror = () => {
+    wrap.style.display = 'none';
+    addLog('Upload failed — check the server.', true);
+    document.getElementById('runBtn').disabled = false;
+  };
+  xhr.send(fd);
+}
+
+// ── Poll ─────────────────────────────────────────────────────
+function pollStatus(jobId) {
+  fetch('/status/' + jobId).then(r => r.json()).then(job => {
+    job.log.slice(_lastLog).forEach(l => addLog(l, l.startsWith('ERROR')));
+    _lastLog = job.log.length;
+
+    if (job.status === 'done') {
+      clearInterval(_poll); _lastLog = 0;
+      document.getElementById('runBtn').disabled = false;
+      renderResults(job);
+    } else if (job.status === 'error') {
+      clearInterval(_poll); _lastLog = 0;
+      document.getElementById('runBtn').disabled = false;
+    }
+  });
+}
+
+// ── Render results ───────────────────────────────────────────
+function renderResults(job) {
+  _currentBugs      = job.bugs;
+  _linearState      = {};
+  _linearSession    = null;
+  document.getElementById('list-session-status').style.display = 'none';
+
+  document.getElementById('layout').classList.add('results-mode');
+  document.getElementById('upload-view').style.display    = 'none';
+  document.getElementById('results-layout').style.display = 'flex';
+
+  // Use provider/model from job metadata when restoring from history
+  const provider = job.provider  || document.getElementById('provider').value;
+  const modelId  = job.model_id  || document.getElementById('model_id').value;
+  const n        = job.bugs.length;
+  document.getElementById('list-meta').textContent =
+    `${n} bug${n !== 1 ? 's' : ''} · ${provider} / ${modelId}`;
+
+  updateLinearStatusBadge();   // show Linear connection status in list header
+
+  const listEl = document.getElementById('bug-list');
+  listEl.innerHTML = '';
+  job.bugs.forEach((bug, i) => {
+    const item = document.createElement('div');
+    item.className = 'bug-list-item';
+    item.id        = 'list-item-' + i;
+    item.onclick   = () => selectBug(i);
+
+    const titleRow = document.createElement('div');
+    titleRow.className = 'item-title-row';
+
+    const num = document.createElement('span');
+    num.className = 'item-num'; num.id = 'list-num-' + i;
+    num.textContent = '#' + (i + 1);
+
+    const title = document.createElement('span');
+    title.className = 'item-title'; title.textContent = bug.title;
+
+    titleRow.appendChild(num);
+    titleRow.appendChild(title);
+
+    const sev = document.createElement('div');
+    sev.className = 'item-sev'; sev.textContent = bug.severity;
+
+    item.appendChild(titleRow);
+    item.appendChild(sev);
+    listEl.appendChild(item);
+  });
+
+  if (job.bugs.length > 0) selectBug(0);
+}
+
+// ── Select & render a bug ─────────────────────────────────────
+const SEV_LEVELS = ['low', 'medium', 'high', 'critical'];
+
+function selectBug(index) {
+  _selectedBugIndex = index;
+  const bug = _currentBugs[index];
+
+  document.querySelectorAll('.bug-list-item').forEach((el, i) => {
+    el.classList.toggle('selected', i === index);
+  });
+
+  const panel = document.getElementById('bug-detail-panel');
+  panel.innerHTML = '';
+
+  // ── Editable title ──────────────────────────────────────────
+  const title = document.createElement('h2');
+  title.className       = 'detail-title';
+  title.contentEditable = 'true';
+  title.spellcheck      = true;
+  title.textContent     = bug.title;
+  title.addEventListener('blur', () => {
+    const v = title.textContent.trim();
+    if (v) saveBugField(index, 'title', v);
+    else   title.textContent = _currentBugs[index].title;   // restore if cleared
+  });
+  title.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); title.blur(); }
+  });
+  panel.appendChild(title);
+
+  // ── Severity ────────────────────────────────────────────────
+  const sevRow = document.createElement('div');
+  sevRow.className = 'detail-severity';
+  const sevLabel = document.createElement('span');
+  sevLabel.textContent = 'Severity';
+  const sevSel = document.createElement('select');
+  sevSel.className = 'sev-sel';
+  SEV_LEVELS.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    if (s === bug.severity) opt.selected = true;
+    sevSel.appendChild(opt);
+  });
+  sevRow.appendChild(sevLabel);
+  sevRow.appendChild(sevSel);
+  panel.appendChild(sevRow);
+
+  // ── Editable description ────────────────────────────────────
+  const hint = document.createElement('div');
+  hint.className   = 'edit-hint';
+  hint.innerHTML   = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/></svg> Click title or description to edit`;
+  panel.appendChild(hint);
+
+  const desc = document.createElement('p');
+  desc.className       = 'detail-description';
+  desc.contentEditable = 'true';
+  desc.spellcheck      = true;
+  desc.textContent     = bug.description;
+  desc.addEventListener('blur', () => {
+    saveBugField(index, 'description', desc.textContent.trim());
+  });
+  // Paste as plain text only
+  desc.addEventListener('paste', e => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    document.execCommand('insertText', false, text);
+  });
+  panel.appendChild(desc);
+
+  // ── Clip video ──────────────────────────────────────────────
+  if (bug.clip_url) {
+    const vidLabel = document.createElement('div');
+    vidLabel.className   = 'detail-video-label';
+    vidLabel.textContent = 'Bug clip';
+    panel.appendChild(vidLabel);
+
+    const video     = document.createElement('video');
+    video.className = 'detail-video';
+    video.controls  = true;
+    video.preload   = 'metadata';
+    video.src       = bug.clip_url;
+    panel.appendChild(video);
+  }
+
+  // ── Linear action ───────────────────────────────────────────
+  const linearDiv = document.createElement('div');
+  linearDiv.className = 'linear-action';
+  linearDiv.id        = 'linear-action-' + index;
+  panel.appendChild(linearDiv);
+  renderLinearAction(linearDiv, index);
+}
+
+// ── Inline editing helpers ────────────────────────────────────
+function saveBugField(index, field, value) {
+  if (!_currentBugs[index]) return;
+  _currentBugs[index][field] = value;
+  if (field === 'title') {
+    const el = document.querySelector('#list-item-' + index + ' .item-title');
+    if (el) el.textContent = value;
+  }
+}
+
+// ── Linear: localStorage helpers ─────────────────────────────
+function linearKey()    { return localStorage.getItem('linear_api_key')  || ''; }
+function linearTeamId() { return localStorage.getItem('linear_team_id')  || ''; }
+function isLinearReady() { return !!(linearKey() && linearTeamId()); }
+
+function setLinearMsg(text, type) {
+  const el = document.getElementById('linear-msg');
+  if (!el) return;
+  el.textContent = text;
+  el.className   = type || '';
+}
+
+// Update the dot + team name in the sidebar label row
+function updateLinearIndicator() {
+  const dot   = document.getElementById('linear-dot');
+  const badge = document.getElementById('linear-team-badge');
+  if (!dot) return;
+  const ready    = isLinearReady();
+  const teamName = localStorage.getItem('linear_team_name') || '';
+  dot.classList.toggle('connected', ready);
+  badge.textContent = ready && teamName ? teamName : '';
+  updateLinearStatusBadge();
+}
+
+// Show the session issue link in the results list-header
+function updateSessionBadge() {
+  const el = document.getElementById('list-session-status');
+  if (!el || !_linearSession) return;
+  el.style.display = 'flex';
+  el.innerHTML =
+    `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#5e6ad2" stroke-width="2" style="flex-shrink:0">` +
+    `<path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>` +
+    `<a href="${_linearSession.url}" target="_blank" style="color:#5e6ad2; text-decoration:none; font-weight:500;">` +
+    `${_linearSession.identifier} — Testing session ↗</a>`;
+}
+
+// Update the small status line shown in the results list-header
+function updateLinearStatusBadge() {
+  const el = document.getElementById('list-linear-status');
+  if (!el) return;
+  if (isLinearReady()) {
+    const name = localStorage.getItem('linear_team_name') || '';
+    el.innerHTML =
+      `<span class="dot on"></span><span style="color:#666">Linear · ${name}</span>`;
+  } else {
+    el.innerHTML =
+      `<span class="dot"></span><span style="color:#bbb">Linear not configured — ` +
+      `<button onclick="resetToUpload()" style="background:none;border:none;cursor:pointer;font-size:inherit;color:#1a73e8;padding:0;text-decoration:underline">open Settings</button></span>`;
+  }
+}
+
+function onLinearKeyInput() {
+  const input = document.getElementById('linearKey');
+  if (input.value !== linearKey()) {
+    localStorage.removeItem('linear_team_id');
+    localStorage.removeItem('linear_team_name');
+    const teamSel = document.getElementById('linear-team-select');
+    teamSel.innerHTML = '<option value="">— pick a team —</option>';
+    teamSel.style.display = 'none';
+    setLinearMsg('');
+    updateLinearIndicator();
+  }
+}
+
+async function connectLinear() {
+  const keyInput = document.getElementById('linearKey');
+  const btn      = document.getElementById('linearConnectBtn');
+  const key      = keyInput.value.trim();
+  if (!key) { setLinearMsg('Enter an API key first.', 'err'); return; }
+
+  btn.disabled    = true;
+  btn.textContent = '…';
+  setLinearMsg('');
+
+  try {
+    const resp = await fetch('/linear/teams', { headers: { 'X-Linear-Key': key } });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || resp.statusText);
+
+    localStorage.setItem('linear_api_key', key);
+
+    const teamSel = document.getElementById('linear-team-select');
+    teamSel.innerHTML = '<option value="">— pick a team —</option>';
+    data.teams.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id; opt.textContent = `${t.name} (${t.key})`;
+      teamSel.appendChild(opt);
+    });
+
+    // Auto-select saved or sole team
+    const savedId = linearTeamId();
+    if (savedId && teamSel.querySelector(`option[value="${savedId}"]`)) {
+      teamSel.value = savedId;
+    } else if (data.teams.length === 1) {
+      teamSel.value = data.teams[0].id;
+      localStorage.setItem('linear_team_id',   data.teams[0].id);
+      localStorage.setItem('linear_team_name', data.teams[0].name);
+    }
+
+    teamSel.style.display = 'block';
+    setLinearMsg('Connected ✓', 'ok');
+    updateLinearIndicator();
+
+    // Refresh any visible "Create in Linear" button
+    if (_selectedBugIndex !== null) {
+      const el = document.getElementById('linear-action-' + _selectedBugIndex);
+      if (el) renderLinearAction(el, _selectedBugIndex);
+    }
+  } catch (err) {
+    setLinearMsg('Error: ' + err.message, 'err');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Connect';
+  }
+}
+
+function onLinearTeamChange() {
+  const sel  = document.getElementById('linear-team-select');
+  const id   = sel.value;
+  const name = id ? sel.options[sel.selectedIndex].textContent.replace(/\s*\(.*\)$/, '') : '';
+  localStorage.setItem('linear_team_id',   id);
+  localStorage.setItem('linear_team_name', name);
+  updateLinearIndicator();
+
+  if (_selectedBugIndex !== null) {
+    const el = document.getElementById('linear-action-' + _selectedBugIndex);
+    if (el) renderLinearAction(el, _selectedBugIndex);
+  }
+}
+
+// ── Linear action button ─────────────────────────────────────
+function renderLinearAction(container, bugIndex) {
+  container.innerHTML = '';
+  const state = _linearState[bugIndex] || { status: 'idle' };
+
+  if (state.status === 'loading') {
+    const wrap = document.createElement('div');
+    wrap.className = 'linear-loading';
+    const spinner = document.createElement('div');
+    spinner.className = 'linear-spinner';
+    const text = document.createElement('span');
+    text.textContent = 'Uploading clip & creating issue…';
+    wrap.appendChild(spinner);
+    wrap.appendChild(text);
+    container.appendChild(wrap);
+    return;
+  }
+
+  if (state.status === 'done') {
+    const wrap = document.createElement('div');
+    wrap.className = 'linear-done-row';
+
+    const link = document.createElement('a');
+    link.className = 'linear-done-link';
+    link.href = state.url; link.target = '_blank';
+    link.innerHTML =
+      `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">` +
+      `<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>` +
+      ` ${state.identifier} — view in Linear ↗`;
+    wrap.appendChild(link);
+
+    if (state.clipWarning) {
+      const warn = document.createElement('div');
+      warn.className   = 'linear-clip-warn';
+      warn.textContent = '⚠ Video not attached: ' + state.clipWarning;
+      wrap.appendChild(warn);
+    }
+
+    container.appendChild(wrap);
+    return;
+  }
+
+  if (state.status === 'error') {
+    const row = document.createElement('div');
+    row.className = 'linear-err-row';
+    const msg = document.createElement('div');
+    msg.className = 'linear-err-msg';
+    msg.textContent = '⚠ ' + state.error;
+    row.appendChild(msg);
+    const retry = document.createElement('button');
+    retry.className = 'linear-create-btn';
+    retry.textContent = 'Retry';
+    retry.onclick = () => createLinearIssue(bugIndex);
+    row.appendChild(retry);
+    container.appendChild(row);
+    return;
+  }
+
+  // idle
+  const btn = document.createElement('button');
+  btn.className = 'linear-create-btn';
+  btn.disabled  = !isLinearReady();
+  btn.title     = isLinearReady() ? '' : 'Configure Linear in Settings first';
+  btn.innerHTML =
+    `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">` +
+    `<path d="M3.26 14.55 9.45 20.74a9.01 9.01 0 0 1-6.19-6.19ZM2.05 11.97 12.03 21.95a9 9 0 0 1-1.06.05A9 9 0 0 1 3 12c0-.35.02-.7.05-1.03ZM21.95 12.03 11.97 2.05A9 9 0 0 1 21 12c0 .35-.02.7-.05 1.03ZM20.74 9.45 14.55 3.26a9.01 9.01 0 0 1 6.19 6.19ZM4.45 16.76l2.79 2.79a9.02 9.02 0 0 1-2.79-2.79ZM16.76 4.45a9.02 9.02 0 0 1 2.79 2.79l-2.79-2.79Z"/>` +
+    `</svg> Create in Linear`;
+  btn.onclick = () => createLinearIssue(bugIndex);
+  container.appendChild(btn);
+}
+
+function updateLinearAction(bugIndex) {
+  const el = document.getElementById('linear-action-' + bugIndex);
+  if (el) renderLinearAction(el, bugIndex);
+}
+
+async function createLinearIssue(bugIndex) {
+  _linearState[bugIndex] = { status: 'loading' };
+  updateLinearAction(bugIndex);
+
+  const bug = _currentBugs[bugIndex];
+
+  try {
+    const resp = await fetch('/linear/create-issue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Linear-Key': linearKey() },
+      body: JSON.stringify({
+        job_id:      _currentJobId,
+        bug_index:   bugIndex,
+        team_id:     linearTeamId(),
+        title:       bug.title,          // send current (possibly edited) values
+        description: bug.description,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || resp.statusText);
+
+    _linearState[bugIndex] = {
+      status:      'done',
+      identifier:  data.identifier,
+      url:         data.url,
+      clipWarning: data.clip_warning || null,
+    };
+
+    // Show / update session badge on first bug pushed
+    if (data.session && !_linearSession) {
+      _linearSession = data.session;
+      updateSessionBadge();
+    }
+
+    // Mark list item
+    const listItem = document.getElementById('list-item-' + bugIndex);
+    if (listItem) listItem.classList.add('sent');
+  } catch (err) {
+    _linearState[bugIndex] = { status: 'error', error: err.message };
+  }
+
+  updateLinearAction(bugIndex);
+}
+
+// ── Restore Linear config from localStorage on page load ──────
+function initLinear() {
+  const key    = linearKey();
+  const teamId = linearTeamId();
+  if (!key) return;
+
+  const keyInput = document.getElementById('linearKey');
+  if (keyInput) keyInput.value = key;
+
+  if (teamId) {
+    const teamSel  = document.getElementById('linear-team-select');
+    const teamName = localStorage.getItem('linear_team_name') || teamId;
+    const opt = document.createElement('option');
+    opt.value = teamId; opt.textContent = teamName;
+    teamSel.appendChild(opt);
+    teamSel.value         = teamId;
+    teamSel.style.display = 'block';
+    setLinearMsg('Connected ✓', 'ok');
+  }
+
+  updateLinearIndicator();
+}
+
+// ── History ───────────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const resp = await fetch('/history');
+    const data = await resp.json();
+    renderHistory(data.history || []);
+  } catch (_) { /* history unavailable — silent */ }
+}
+
+function renderHistory(entries) {
+  const section = document.getElementById('history-section');
+  const empty   = document.getElementById('empty');
+  const list    = document.getElementById('history-list');
+
+  if (!entries.length) {
+    section.style.display = 'none';
+    empty.style.display   = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  list.innerHTML = '';
+
+  entries.forEach(meta => {
+    const item = document.createElement('div');
+    item.className = 'history-item';
+
+    const fname = document.createElement('div');
+    fname.className   = 'history-filename';
+    fname.textContent = meta.original_filename || 'Unknown file';
+
+    const info = document.createElement('div');
+    info.className = 'history-meta';
+    const d   = new Date(meta.created_at);
+    const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    const n = meta.bug_count;
+    info.textContent = `${n} bug${n !== 1 ? 's' : ''} · ${meta.provider} / ${meta.model_id} · ${dateStr} ${timeStr}`;
+
+    item.appendChild(fname);
+    item.appendChild(info);
+    item.onclick = () => restoreJob(meta);
+    list.appendChild(item);
+  });
+
+  section.style.display = 'flex';
+}
+
+function restoreJob(meta) {
+  _currentJobId = meta.job_id;
+  renderResults({
+    bugs:     meta.bugs,
+    video_url: meta.video_url,
+    provider: meta.provider,
+    model_id: meta.model_id,
+  });
+}
+
+// ── Reset to upload state ────────────────────────────────────
+function resetToUpload() {
+  document.getElementById('layout').classList.remove('results-mode');
+  document.getElementById('results-layout').style.display = 'none';
+  document.getElementById('upload-view').style.display    = '';
+  document.getElementById('log-box').innerHTML = '';
+  document.getElementById('log-box').style.display = 'none';
+  document.getElementById('runBtn').disabled = !_selectedFile;
+  _currentBugs = []; _selectedBugIndex = null; _linearState = {}; _linearSession = null;
+  loadHistory();
+}
+
+// ── Storage ──────────────────────────────────────────────────
+async function openStorage() {
+  const resp = await fetch('/open-storage');
+  if (!resp.ok) {
+    const d = await resp.json().catch(() => ({}));
+    alert('Could not open folder: ' + (d.error || resp.statusText));
+  }
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+initAiKey();
+initLinear();
+loadHistory();
+</script>
+</body>
+</html>
