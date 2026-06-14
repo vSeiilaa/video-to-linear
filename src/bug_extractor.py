@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, List, Optional
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
@@ -8,6 +9,7 @@ from .prompts import BUG_FINDER_SYSTEM, BUG_REPORT_SYSTEM
 
 _CHUNK_SIZE = 40
 _CHUNK_OVERLAP = 8
+_REPORT_WORKERS = 4  # parallel LLM calls when building per-bug reports
 
 
 class BugSegment(BaseModel):
@@ -42,11 +44,17 @@ def _chunk(segments: list, size: int = _CHUNK_SIZE, overlap: int = _CHUNK_OVERLA
     return chunks
 
 
-def _dedup(bugs: List[Bug], tolerance_ms: int = 3000) -> List[Bug]:
-    seen: List[Bug] = []
-    for bug in bugs:
-        if not any(abs(bug.start_ms - s.start_ms) < tolerance_ms for s in seen):
-            seen.append(bug)
+def _dedup(items: list, tolerance_ms: int = 3000) -> list:
+    """Drop items whose start_ms is within tolerance of one already kept.
+
+    Works for any object exposing .start_ms (BugSegment or Bug). Deduping at the
+    segment level avoids paying for duplicate report-generation calls created by
+    the overlap between adjacent transcript chunks.
+    """
+    seen: list = []
+    for item in items:
+        if not any(abs(item.start_ms - s.start_ms) < tolerance_ms for s in seen):
+            seen.append(item)
     return seen
 
 
@@ -72,7 +80,10 @@ def find_bug_segments(
             except ValidationError:
                 pass
 
-    return all_segments
+    # Keep only actual bugs and drop near-duplicates from chunk overlap *before*
+    # building reports, so we never pay for a report we'd discard later.
+    bug_segs = [s for s in all_segments if s.is_bug]
+    return _dedup(bug_segs)
 
 
 def build_bug_reports(
@@ -83,11 +94,13 @@ def build_bug_reports(
     report_prompt: str = BUG_REPORT_SYSTEM,
     api_key: Optional[str] = None,
 ) -> List[Bug]:
-    bugs: List[Bug] = []
+    # Segments are already filtered to bugs and deduped by find_bug_segments;
+    # filter defensively in case this is called directly.
     bug_segs = [s for s in bug_segments if s.is_bug]
+    total = len(bug_segs)
 
-    for i, seg in enumerate(bug_segs):
-        log(f"  Building report {i + 1}/{len(bug_segs)}…")
+    def _build(i: int, seg: BugSegment) -> Optional[Bug]:
+        log(f"  Building report {i + 1}/{total}…")
         payload = json.dumps({
             "snippet": seg.raw_text,
             "start_ms": seg.start_ms,
@@ -95,8 +108,13 @@ def build_bug_reports(
         })
         raw = call_llm_json(provider, model_id, report_prompt, payload, api_key=api_key)
         try:
-            bugs.append(Bug.model_validate_json(raw))
+            return Bug.model_validate_json(raw)
         except ValidationError as e:
             log(f"  Validation error on segment {i + 1}: {e}")
+            return None
 
-    return _dedup(bugs)
+    # Build reports in parallel; preserve input order so timestamps stay sorted.
+    with ThreadPoolExecutor(max_workers=_REPORT_WORKERS) as pool:
+        results = list(pool.map(lambda args: _build(*args), enumerate(bug_segs)))
+
+    return [b for b in results if b is not None]

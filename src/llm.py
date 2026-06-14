@@ -10,13 +10,13 @@ PROVIDER_MODELS: dict[str, list[dict]] = {
         {"id": "gpt-5.4-mini", "label": "GPT-5.4 Mini"},
     ],
     "claude": [
-        {"id": "claude-opus-4-7", "label": "Claude Opus 4.7"},
+        {"id": "claude-opus-4-8", "label": "Claude Opus 4.8"},
         {"id": "claude-sonnet-4-6", "label": "Claude Sonnet 4.6"},
         {"id": "claude-haiku-4-5", "label": "Claude Haiku 4.5"},
     ],
     "gemini": [
-        {"id": "gemini-3-flash-preview", "label": "Gemini 3 Flash"},
-        {"id": "gemini-3.1-flash-lite-preview", "label": "Gemini 3.1 Flash-Lite"},
+        {"id": "gemini-3.5-flash", "label": "Gemini 3.5 Flash"},
+        {"id": "gemini-3.1-flash-lite", "label": "Gemini 3.1 Flash-Lite"},
     ],
 }
 
@@ -102,5 +102,8 @@ def _call_gemini(model_id: str, system: str, user: str, api_key: str | None = No
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
+        # Gemini's OpenAI-compatible endpoint honors json_object; without it the
+        # model tends to wrap output in prose/markdown, forcing wasted retries.
+        response_format={"type": "json_object"},
     )
     return resp.choices[0].message.content

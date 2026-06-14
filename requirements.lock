@@ -1,0 +1,15 @@
+# Pinned versions of the direct dependencies, known-good for this app.
+# Install with:  pip install -r requirements.lock
+#
+# This pins direct dependencies only (not the full transitive tree); it exists
+# to keep installs reproducible across machines without a resolver like uv.
+pydantic==2.13.3
+ffmpeg-python==0.2.0
+jinja2==3.1.4
+python-dotenv==1.2.2
+openai==2.30.0
+anthropic==0.83.0
+flask==3.0.3
+tqdm==4.66.4
+pandas==2.2.2
+requests==2.32.2

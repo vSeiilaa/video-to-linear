@@ -14,6 +14,22 @@ _VIDEO_ENCODERS = [
 ]
 
 
+def _ffmpeg_error_detail(exc: Exception) -> str:
+    """Extract a human-readable reason from a failed ffmpeg subprocess call.
+
+    ffmpeg writes the actual failure reason to stderr (captured as bytes), which
+    is otherwise lost when only the exception object is re-raised.
+    """
+    stderr = getattr(exc, "stderr", None)
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", "replace")
+    if stderr:
+        # Keep the tail — ffmpeg's real error is on the last few lines.
+        tail = "\n".join(stderr.strip().splitlines()[-5:])
+        return f"{exc}: {tail}"
+    return str(exc)
+
+
 def extract_audio(video_path: Path, audio_path: Path) -> Path:
     """Extract and re-encode audio to mp3 (supported by OpenAI transcription API)."""
     mp3_path = audio_path.with_suffix(".mp3")
@@ -56,7 +72,7 @@ def transcode_for_web(video_path: Path, out_path: Path) -> Path:
             last_exc = exc
             out_path.unlink(missing_ok=True)
 
-    raise RuntimeError(f"Web transcode failed: {last_exc}")
+    raise RuntimeError(f"Web transcode failed: {_ffmpeg_error_detail(last_exc)}")
 
 
 def extract_clip(
@@ -100,4 +116,6 @@ def extract_clip(
             last_exc = exc
             out_path.unlink(missing_ok=True)
 
-    raise RuntimeError(f"All encoders failed for clip {out_path.name}: {last_exc}")
+    raise RuntimeError(
+        f"All encoders failed for clip {out_path.name}: {_ffmpeg_error_detail(last_exc)}"
+    )
