@@ -26,8 +26,8 @@ Record yourself testing a feature, talking through what you see. Upload the vide
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/YOUR-ORG/video-bug-report.git
-cd video-bug-report
+git clone https://github.com/vSeiilaa/video-to-linear.git
+cd video-to-linear
 
 # 2. Create and activate a virtual environment
 python3 -m venv .venv
