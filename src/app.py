@@ -28,6 +28,25 @@ app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024 * 1024  # 4 GB
 
 # job_id -> {status, log, bugs, video_url}
 _jobs: dict[str, dict] = {}
+# Guards _jobs: the worker thread mutates job state (e.g. appends to "log")
+# while /status serializes it, which can otherwise read a list mid-append.
+_jobs_lock = threading.Lock()
+
+# Cap on in-memory jobs. Finished jobs are persisted to out/<id>/meta.json and
+# reloaded on demand (see linear_create / history), so evicting the oldest
+# completed entries here is lossless and just prevents unbounded growth.
+_MAX_JOBS = 50
+
+
+def _evict_jobs_locked() -> None:
+    """Drop oldest finished jobs once over _MAX_JOBS. Caller must hold _jobs_lock."""
+    if len(_jobs) <= _MAX_JOBS:
+        return
+    finished = [jid for jid, j in _jobs.items() if j.get("status") in ("done", "error")]
+    for jid in finished:
+        if len(_jobs) <= _MAX_JOBS:
+            break
+        _jobs.pop(jid, None)
 
 
 @app.route("/")
@@ -97,17 +116,20 @@ def run_job():
 
     job_id = str(uuid.uuid4())
     video_url = f"/uploads/{filename}"
-    _jobs[job_id] = {
-        "status": "running", "log": [], "bugs": None, "video_url": video_url,
-        "original_filename": uploaded.filename,
-        "provider": provider, "model_id": model_id,
-    }
+    with _jobs_lock:
+        _jobs[job_id] = {
+            "status": "running", "log": [], "bugs": None, "video_url": video_url,
+            "original_filename": uploaded.filename,
+            "provider": provider, "model_id": model_id,
+        }
+        _evict_jobs_locked()
 
     def worker():
         job = _jobs[job_id]
 
         def log(msg: str):
-            job["log"].append(msg)
+            with _jobs_lock:
+                job["log"].append(msg)
 
         try:
             out_dir = _OUT_DIR / job_id
@@ -159,10 +181,13 @@ def run_job():
 
 @app.route("/status/<job_id>")
 def status(job_id: str):
-    job = _jobs.get(job_id)
-    if job is None:
-        return jsonify({"error": "unknown job"}), 404
-    return jsonify(job)
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        if job is None:
+            return jsonify({"error": "unknown job"}), 404
+        # Snapshot under the lock so we never serialize "log" mid-append.
+        snapshot = {**job, "log": list(job["log"])}
+    return jsonify(snapshot)
 
 
 @app.route("/history")
@@ -264,6 +289,9 @@ def linear_create():
 
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 8080))
-    app.run(debug=True, threaded=True, port=port)
+    # Debug mode enables the Werkzeug interactive debugger, which allows
+    # arbitrary code execution from the browser and can leak API keys in
+    # tracebacks. Keep it off unless explicitly opted in via FLASK_DEBUG=1.
+    debug = os.environ.get("FLASK_DEBUG") == "1"
+    app.run(debug=debug, threaded=True, port=port)

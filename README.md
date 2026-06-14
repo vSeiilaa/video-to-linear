@@ -35,12 +35,18 @@ source .venv/bin/activate
 
 # 3. Install dependencies
 pip install -e .
+# …or, for a reproducible pinned install:
+#   pip install -r requirements.lock
 
 # 4. Start the server
 python -m src.app
 ```
 
 Then open **http://localhost:8080** in your browser.
+
+> **Debug mode is off by default.** To enable Flask's auto-reloader/debugger
+> (do *not* do this when others can reach the port — it allows code execution),
+> set `FLASK_DEBUG=1`.
 
 ---
 
@@ -88,4 +94,16 @@ MP4 · MOV · AVI · MKV · WEBM · M4V · MPEG
 
 ```bash
 PORT=9000 python -m src.app
+```
+
+---
+
+## Development
+
+Run the unit tests (cover the pure logic: chunking/dedup, JSON extraction,
+Linear formatting, transcript flattening, ffmpeg error parsing):
+
+```bash
+pip install -e ".[dev]"
+pytest
 ```

@@ -24,3 +24,6 @@ out/
 
 # Context / scratch files
 context/
+
+# Internal project source-of-truth doc (local only, not for GitHub)
+PROJECT.md
